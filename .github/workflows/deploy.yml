@@ -1,0 +1,72 @@
+name: Deploy — Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment target
+        type: choice
+        options: [production, staging]
+        default: production
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'production' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          NODE_ENV: production
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+
+      # ── Vercel Deployment ──
+      - name: Deploy to Vercel
+        if: ${{ vars.DEPLOY_TARGET == 'vercel' }}
+        run: npx vercel --prod --token ${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # ── Docker + VPS Deployment ──
+      - name: Build Docker image
+        if: ${{ vars.DEPLOY_TARGET == 'docker' }}
+        run: |
+          docker build -t prospect-os:${{ github.sha }} .
+          docker tag prospect-os:${{ github.sha }} prospect-os:latest
+
+      - name: Push to registry & deploy
+        if: ${{ vars.DEPLOY_TARGET == 'docker' }}
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ vars.REGISTRY_URL }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          docker push ${{ vars.REGISTRY_URL }}/prospect-os:${{ github.sha }}
+          docker push ${{ vars.REGISTRY_URL }}/prospect-os:latest
+
+      # ── Health Check ──
+      - name: Verify deployment health
+        run: |
+          sleep 15
+          curl -f "${{ vars.NEXT_PUBLIC_APP_URL }}/api/v1/admin/health" || exit 1

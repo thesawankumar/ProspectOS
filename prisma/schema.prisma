@@ -1,0 +1,954 @@
+// ProspectOS Database Schema
+// PostgreSQL via Prisma ORM
+// Version: 1.0.0
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────
+// IDENTITY & ACCESS MANAGEMENT
+// ─────────────────────────────────────────────────
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  emailVerified     Boolean   @default(false)
+  passwordHash      String?
+  name              String
+  avatarUrl         String?
+  role              UserRole  @default(USER)
+  plan              PlanTier  @default(FREE)
+  twoFactorEnabled  Boolean   @default(false)
+  twoFactorSecret   String?
+  onboardingDone    Boolean   @default(false)
+  lastLoginAt       DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  workspaceMembers  WorkspaceMember[]
+  apiKeys           ApiKey[]
+  sessions          Session[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  activities        Activity[]
+
+  @@index([email])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  deviceName   String?
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Workspace {
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  logoUrl       String?
+  industry      String?
+  website       String?
+  teamSize      String?
+  plan          PlanTier @default(FREE)
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  members       WorkspaceMember[]
+  leads         Lead[]
+  companies     Company[]
+  campaigns     Campaign[]
+  templates     EmailTemplate[]
+  proposals     Proposal[]
+  invoices      Invoice[]
+  contracts     Contract[]
+  webhooks      Webhook[]
+  integrations  Integration[]
+  apiKeys       ApiKey[]
+  settings      Setting[]
+  files         Attachment[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  jobs          Job[]
+  tags          Tag[]
+  customFields  CustomField[]
+
+  @@index([slug])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String          @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole   @default(MEMBER)
+  invitedAt   DateTime        @default(now())
+  acceptedAt  DateTime?
+
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  name        String
+  keyHash     String    @unique
+  prefix      String
+  scopes      String[]
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+// ─────────────────────────────────────────────────
+// CRM — LEADS, COMPANIES, CONTACTS
+// ─────────────────────────────────────────────────
+
+model Company {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  name          String
+  domain        String?
+  website       String?
+  industry      String?
+  size          String?
+  revenue       String?
+  location      String?
+  description   String?
+  logoUrl       String?
+  linkedinUrl   String?
+  twitterUrl    String?
+  techStack     String[]
+  score         Int       @default(0)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leads         Lead[]
+  notes         Note[]
+  activities    Activity[]
+  insights      AIInsight[]
+  analyses      WebsiteAnalysis[]
+
+  @@index([workspaceId, domain])
+  @@index([deletedAt])
+  @@map("companies")
+}
+
+model Lead {
+  id              String      @id @default(uuid())
+  workspaceId     String
+  companyId       String?
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  linkedinUrl     String?
+  twitterUrl      String?
+  instagramUrl    String?
+  jobTitle        String?
+  department      String?
+  location        String?
+  timezone        String?
+  leadScore       Int         @default(0)
+  stage           LeadStage   @default(NEW)
+  source          String?
+  ownerUserId     String?
+  isVerified      Boolean     @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company         Company?          @relation(fields: [companyId], references: [id])
+  emailAddresses  EmailAddress[]
+  campaignLeads   CampaignLead[]
+  emailMessages   EmailMessage[]
+  emailValidations EmailValidation[]
+  notes           Note[]
+  tasks           Task[]
+  meetings        Meeting[]
+  activities      Activity[]
+  tags            LeadTag[]
+
+  @@index([workspaceId, stage])
+  @@index([workspaceId, email])
+  @@index([deletedAt])
+  @@map("leads")
+}
+
+model EmailAddress {
+  id            String       @id @default(uuid())
+  leadId        String
+  address       String
+  type          EmailType    @default(PERSONAL)
+  confidence    Int          @default(0)
+  source        String?
+  isVerified    Boolean      @default(false)
+  lastVerifiedAt DateTime?
+  riskLevel     String?
+  createdAt     DateTime     @default(now())
+
+  lead          Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  validations   EmailValidation[]
+
+  @@index([leadId])
+  @@index([address])
+  @@map("email_addresses")
+}
+
+model EmailValidation {
+  id              String    @id @default(uuid())
+  leadId          String?
+  emailAddressId  String?
+  email           String
+  isValid         Boolean
+  isDisposable    Boolean   @default(false)
+  isCatchAll      Boolean   @default(false)
+  mxRecordFound   Boolean   @default(false)
+  smtpCheck       Boolean   @default(false)
+  riskScore       Int       @default(0)
+  details         Json?
+  validatedAt     DateTime  @default(now())
+
+  lead            Lead?         @relation(fields: [leadId], references: [id])
+  emailAddress    EmailAddress? @relation(fields: [emailAddressId], references: [id])
+
+  @@index([email])
+  @@map("email_validations")
+}
+
+// ─────────────────────────────────────────────────
+// CAMPAIGNS & EMAIL ENGINE
+// ─────────────────────────────────────────────────
+
+model Campaign {
+  id              String          @id @default(uuid())
+  workspaceId     String
+  name            String
+  description     String?
+  status          CampaignStatus  @default(DRAFT)
+  fromName        String?
+  fromEmail       String?
+  replyToEmail    String?
+  dailyLimit      Int             @default(50)
+  delayMinutes    Int             @default(60)
+  timezone        String          @default("UTC")
+  trackOpens      Boolean         @default(true)
+  trackClicks     Boolean         @default(true)
+  startDate       DateTime?
+  endDate         DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leads           CampaignLead[]
+  messages        EmailMessage[]
+  followUps       FollowUpSequence[]
+
+  @@index([workspaceId, status])
+  @@index([deletedAt])
+  @@map("campaigns")
+}
+
+model CampaignLead {
+  id          String              @id @default(uuid())
+  campaignId  String
+  leadId      String
+  status      CampaignLeadStatus  @default(QUEUED)
+  addedAt     DateTime            @default(now())
+  sentAt      DateTime?
+  openedAt    DateTime?
+  repliedAt   DateTime?
+  bouncedAt   DateTime?
+  unsubAt     DateTime?
+
+  campaign    Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead        Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, leadId])
+  @@map("campaign_leads")
+}
+
+model EmailTemplate {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  subject     String
+  body        String
+  folder      String    @default("General")
+  variables   String[]
+  isFavorite  Boolean   @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages    EmailMessage[]
+
+  @@index([workspaceId, folder])
+  @@map("email_templates")
+}
+
+model EmailMessage {
+  id           String          @id @default(uuid())
+  campaignId   String?
+  leadId       String?
+  templateId   String?
+  subject      String
+  body         String
+  fromEmail    String
+  toEmail      String
+  status       EmailStatus     @default(QUEUED)
+  providerMsgId String?
+  sentAt       DateTime?
+  scheduledAt  DateTime?
+  createdAt    DateTime        @default(now())
+
+  campaign     Campaign?       @relation(fields: [campaignId], references: [id])
+  lead         Lead?           @relation(fields: [leadId], references: [id])
+  template     EmailTemplate?  @relation(fields: [templateId], references: [id])
+  events       EmailEvent[]
+
+  @@index([campaignId])
+  @@index([leadId])
+  @@index([status])
+  @@map("email_messages")
+}
+
+model EmailEvent {
+  id          String      @id @default(uuid())
+  messageId   String
+  type        EventType
+  userAgent   String?
+  ipAddress   String?
+  metadata    Json?
+  occurredAt  DateTime    @default(now())
+
+  message     EmailMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, type])
+  @@map("email_events")
+}
+
+// ─────────────────────────────────────────────────
+// AI INTELLIGENCE
+// ─────────────────────────────────────────────────
+
+model WebsiteAnalysis {
+  id            String    @id @default(uuid())
+  companyId     String?
+  url           String
+  title         String?
+  description   String?
+  techStack     String[]
+  painPoints    String[]
+  services      String[]
+  targetAudience String?
+  tone          String?
+  pitchSuggestions String[]
+  rawContent    String?
+  analyzedAt    DateTime  @default(now())
+
+  company       Company?  @relation(fields: [companyId], references: [id])
+
+  @@index([url])
+  @@map("website_analyses")
+}
+
+model AIInsight {
+  id          String    @id @default(uuid())
+  companyId   String?
+  type        String
+  content     String
+  model       String    @default("gemini-pro")
+  tokens      Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  company     Company?  @relation(fields: [companyId], references: [id])
+
+  @@map("ai_insights")
+}
+
+// ─────────────────────────────────────────────────
+// FOLLOW-UP SEQUENCES
+// ─────────────────────────────────────────────────
+
+model FollowUpSequence {
+  id          String          @id @default(uuid())
+  campaignId  String
+  name        String
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+
+  campaign    Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  steps       FollowUpStep[]
+
+  @@map("follow_up_sequences")
+}
+
+model FollowUpStep {
+  id          String           @id @default(uuid())
+  sequenceId  String
+  stepNumber  Int
+  delayDays   Int              @default(3)
+  subject     String
+  body        String
+  condition   String?
+  createdAt   DateTime         @default(now())
+
+  sequence    FollowUpSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@index([sequenceId, stepNumber])
+  @@map("follow_up_steps")
+}
+
+// ─────────────────────────────────────────────────
+// MEETINGS, TASKS, NOTES
+// ─────────────────────────────────────────────────
+
+model Meeting {
+  id          String          @id @default(uuid())
+  leadId      String?
+  workspaceId String?
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  meetingUrl  String?
+  status      MeetingStatus   @default(SCHEDULED)
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  lead        Lead?           @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@index([startTime])
+  @@map("meetings")
+}
+
+model Task {
+  id          String        @id @default(uuid())
+  leadId      String?
+  workspaceId String?
+  title       String
+  description String?
+  priority    TaskPriority  @default(MEDIUM)
+  status      TaskStatus    @default(TODO)
+  dueDate     DateTime?
+  assigneeId  String?
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  lead        Lead?         @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@index([status])
+  @@map("tasks")
+}
+
+model Note {
+  id          String    @id @default(uuid())
+  leadId      String?
+  companyId   String?
+  workspaceId String?
+  content     String
+  authorId    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lead        Lead?     @relation(fields: [leadId], references: [id])
+  company     Company?  @relation(fields: [companyId], references: [id])
+
+  @@index([leadId])
+  @@map("notes")
+}
+
+model Activity {
+  id          String    @id @default(uuid())
+  userId      String?
+  leadId      String?
+  companyId   String?
+  workspaceId String?
+  type        String
+  description String
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  user        User?     @relation(fields: [userId], references: [id])
+  lead        Lead?     @relation(fields: [leadId], references: [id])
+  company     Company?  @relation(fields: [companyId], references: [id])
+
+  @@index([workspaceId, createdAt])
+  @@index([leadId])
+  @@map("activities")
+}
+
+// ─────────────────────────────────────────────────
+// PROPOSALS, INVOICES, CONTRACTS
+// ─────────────────────────────────────────────────
+
+model Proposal {
+  id          String          @id @default(uuid())
+  workspaceId String
+  clientName  String
+  company     String
+  services    String?
+  pricing     String?
+  content     String?
+  status      ProposalStatus  @default(DRAFT)
+  sentAt      DateTime?
+  acceptedAt  DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@map("proposals")
+}
+
+model Invoice {
+  id            String          @id @default(uuid())
+  workspaceId   String
+  invoiceNumber String          @unique
+  clientName    String
+  amount        Decimal         @db.Decimal(12, 2)
+  currency      String          @default("USD")
+  status        InvoiceStatus   @default(PENDING)
+  dueDate       DateTime
+  paidAt        DateTime?
+  notes         String?
+  lineItems     Json?
+  deletedAt     DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@map("invoices")
+}
+
+model Contract {
+  id          String          @id @default(uuid())
+  workspaceId String
+  clientName  String
+  type        ContractType    @default(RETAINER)
+  content     String?
+  status      ContractStatus  @default(DRAFT)
+  signedAt    DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("contracts")
+}
+
+// ─────────────────────────────────────────────────
+// FILES & ATTACHMENTS
+// ─────────────────────────────────────────────────
+
+model Attachment {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  fileName    String
+  mimeType    String
+  sizeBytes   BigInt
+  url         String
+  folder      String    @default("General")
+  uploadedBy  String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, folder])
+  @@map("attachments")
+}
+
+// ─────────────────────────────────────────────────
+// TAGGING & CUSTOM FIELDS
+// ─────────────────────────────────────────────────
+
+model Tag {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  color       String    @default("#6366F1")
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leads       LeadTag[]
+
+  @@unique([workspaceId, name])
+  @@map("tags")
+}
+
+model LeadTag {
+  leadId      String
+  tagId       String
+
+  lead        Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag         Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, tagId])
+  @@map("lead_tags")
+}
+
+model CustomField {
+  id          String    @id @default(uuid())
+  workspaceId String
+  entity      String
+  name        String
+  type        String
+  options     String[]
+  isRequired  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("custom_fields")
+}
+
+// ─────────────────────────────────────────────────
+// INTEGRATIONS & WEBHOOKS
+// ─────────────────────────────────────────────────
+
+model Webhook {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  url           String
+  events        String[]
+  secret        String?
+  isActive      Boolean   @default(true)
+  lastDeliveryAt DateTime?
+  failureCount  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries    WebhookDelivery[]
+
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id          String    @id @default(uuid())
+  webhookId   String
+  event       String
+  payload     Json
+  statusCode  Int?
+  response    String?
+  duration    Int?
+  success     Boolean   @default(false)
+  attemptedAt DateTime  @default(now())
+
+  webhook     Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@map("webhook_deliveries")
+}
+
+model Integration {
+  id          String    @id @default(uuid())
+  workspaceId String
+  provider    String
+  isConnected Boolean   @default(false)
+  config      Json?
+  accessToken String?
+  refreshToken String?
+  expiresAt   DateTime?
+  connectedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@map("integrations")
+}
+
+// ─────────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────────
+
+model Notification {
+  id          String              @id @default(uuid())
+  userId      String
+  workspaceId String?
+  type        NotificationType    @default(INFO)
+  title       String
+  message     String
+  actionUrl   String?
+  isRead      Boolean             @default(false)
+  readAt      DateTime?
+  createdAt   DateTime            @default(now())
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace?          @relation(fields: [workspaceId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────────
+// BACKGROUND JOBS & QUEUES
+// ─────────────────────────────────────────────────
+
+model Job {
+  id          String      @id @default(uuid())
+  workspaceId String?
+  type        String
+  payload     Json
+  status      JobStatus   @default(PENDING)
+  attempts    Int         @default(0)
+  maxAttempts Int         @default(3)
+  error       String?
+  result      Json?
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime    @default(now())
+
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id])
+
+  @@index([status, scheduledAt])
+  @@index([workspaceId])
+  @@map("jobs")
+}
+
+// ─────────────────────────────────────────────────
+// AUDIT & SETTINGS
+// ─────────────────────────────────────────────────
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  userId      String?
+  workspaceId String?
+  action      String
+  entity      String?
+  entityId    String?
+  oldData     Json?
+  newData     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  user        User?     @relation(fields: [userId], references: [id])
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model Setting {
+  id          String    @id @default(uuid())
+  workspaceId String
+  key         String
+  value       String
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@map("settings")
+}
+
+// ─────────────────────────────────────────────────
+// ENUMERATIONS
+// ─────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum PlanTier {
+  FREE
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  REPLIED
+  INTERESTED
+  MEETING
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum CampaignLeadStatus {
+  QUEUED
+  SENT
+  OPENED
+  CLICKED
+  REPLIED
+  BOUNCED
+  UNSUBSCRIBED
+}
+
+enum EmailStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  FAILED
+}
+
+enum EmailType {
+  PERSONAL
+  WORK
+  ROLE_BASED
+  GENERIC
+}
+
+enum EventType {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  REPLIED
+  BOUNCED
+  UNSUBSCRIBED
+  COMPLAINED
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  REJECTED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum ContractType {
+  FREELANCE
+  AGENCY
+  RETAINER
+  CONSULTING
+  PROJECT
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  SIGNED
+  EXPIRED
+  TERMINATED
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  REPLY
+  MEETING
+  CAMPAIGN
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}

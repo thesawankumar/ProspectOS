@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useProspectStore } from "@/lib/store";
 import { useToast } from "@/components/ui/Toast";
 import CommandPalette from "@/components/dashboard/CommandPalette";
+import AIChatPanel from "@/components/dashboard/AIChatPanel";
+import NotificationCenter from "@/components/dashboard/NotificationCenter";
 import {
   Search,
   Compass,
@@ -55,6 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [aiChatOpen, setAiChatOpen] = useState(false);
 
   // Bind keyboard shortcut CTRL+K to Command Palette
   useEffect(() => {
@@ -288,86 +291,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span>Search / Actions</span>
             </button>
 
-            {/* Notification Badge Bell */}
-            <div className="relative">
-              <button
-                onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors relative cursor-pointer focus:outline-hidden"
-                aria-label="Open notifications"
-              >
-                <Bell className="h-4.5 w-4.5" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[#EC9EB2] ring-2 ring-white" />
-                )}
-              </button>
+            {/* Real-time Notification Center */}
+            <NotificationCenter />
 
-              {/* Notifications Panel Box */}
-              <AnimatePresence>
-                {notificationsOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setNotificationsOpen(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 mt-2 z-20 w-80 bg-white border border-gray-200/80 rounded-2xl shadow-2xl p-4 space-y-3"
-                    >
-                      <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                        <span className="text-xs font-bold text-gray-800">
-                          Inbox Alerts ({unreadCount})
-                        </span>
-                        <div className="flex space-x-2 text-3xs font-semibold">
-                          <button
-                            onClick={() => {
-                              markNotificationsRead();
-                              toast({ title: "Notifications Read", description: "Cleared unread counts", variant: "info" });
-                            }}
-                            className="text-[#D84B68] hover:text-[#EC9EB2]"
-                          >
-                            Mark Read
-                          </button>
-                          <span className="text-gray-200">|</span>
-                          <button
-                            onClick={() => {
-                              clearNotifications();
-                              toast({ title: "Alerts Cleared", description: "Cleared inbox list", variant: "info" });
-                            }}
-                            className="text-gray-400 hover:text-gray-600"
-                          >
-                            Clear
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="divide-y divide-gray-50 max-h-[220px] overflow-y-auto">
-                        {notifications.length > 0 ? (
-                          notifications.map((n) => (
-                            <div
-                              key={n.id}
-                              className={cn(
-                                "py-2 px-1 text-xs text-gray-600 leading-normal flex items-start gap-2",
-                                !n.read && "font-semibold bg-[#FCE7EB]/10"
-                              )}
-                            >
-                              <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                              <div className="flex-1">
-                                <p className="text-gray-800">{n.title}</p>
-                                <p className="text-3xs text-gray-400">{n.message}</p>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="py-6 text-center text-xs text-gray-400">
-                            Zero unread messages. Good job!
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
+            {/* AI Chat Toggle */}
+            <button
+              onClick={() => setAiChatOpen(true)}
+              title="Open AI Assistant"
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-[#D84B68] to-[#FF6B6B] text-white text-2xs font-bold shadow-sm hover:shadow-md transition-all cursor-pointer"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>AI Chat</span>
+            </button>
 
             {/* Profile Avatar Trigger */}
             <div className="h-8 w-8 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center font-bold text-xs text-gray-700 select-none">
@@ -471,6 +406,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* 4. MODAL DIALOG COMMAND PALETTE */}
       <CommandPalette isOpen={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
+
+      {/* 5. AI CHAT PANEL */}
+      <AIChatPanel isOpen={aiChatOpen} onClose={() => setAiChatOpen(false)} />
     </div>
   );
 }
