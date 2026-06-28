@@ -32,7 +32,7 @@ export interface Campaign {
   replyCount: number;
   bounceCount: number;
   dailyLimit: number;
-  delaySeconds: number; // Jitter / delay between sends
+  delaySeconds: number;
   timezone: string;
 }
 
@@ -43,6 +43,65 @@ export interface Template {
   body: string;
   folder: string;
   isFavorite: boolean;
+}
+
+export interface Proposal {
+  id: string;
+  clientName: string;
+  company: string;
+  services: string;
+  pricing: string;
+  text: string;
+  status: "Draft" | "Sent" | "Accepted";
+  date: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  clientName: string;
+  amount: number;
+  status: "Paid" | "Pending" | "Overdue";
+  dueDate: string;
+}
+
+export interface Contract {
+  id: string;
+  clientName: string;
+  type: "Freelance" | "Agency" | "Retainer" | "Consulting";
+  status: "Active" | "Draft" | "Signed";
+  date: string;
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  events: string[];
+  status: "Active" | "Inactive";
+}
+
+export interface WebhookDeliveryLog {
+  id: string;
+  url: string;
+  event: string;
+  timestamp: string;
+  statusCode: number;
+}
+
+export interface DocumentFile {
+  id: string;
+  name: string;
+  size: string;
+  type: string;
+  folder: string;
+  date: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string;
+  type: "meeting" | "task" | "sequence";
 }
 
 export interface Workspace {
@@ -60,6 +119,13 @@ export interface Workspace {
   activities: { id: string; type: string; title: string; timestamp: string }[];
   campaigns: Campaign[];
   templates: Template[];
+  proposals: Proposal[];
+  invoices: Invoice[];
+  contracts: Contract[];
+  webhooks: WebhookEndpoint[];
+  webhookLogs: WebhookDeliveryLog[];
+  files: DocumentFile[];
+  calendarEvents: CalendarEvent[];
 }
 
 interface UserSession {
@@ -71,19 +137,29 @@ interface UserSession {
   activeDevices: { id: string; device: string; ip: string; location: string; active: boolean }[];
 }
 
+interface FeatureFlags {
+  aiAgent: boolean;
+  proposals: boolean;
+  contracts: boolean;
+  invoices: boolean;
+  webhooks: boolean;
+}
+
 interface ProspectStore {
   session: UserSession;
   workspaces: Workspace[];
   activeWorkspaceId: string;
   notifications: { id: string; title: string; message: string; read: boolean; type: "success" | "warning" | "info" }[];
+  featureFlags: FeatureFlags;
   
   // Actions
   setSession: (session: Partial<UserSession>) => void;
-  addWorkspace: (workspace: Omit<Workspace, "leads" | "activities" | "campaigns" | "templates">) => void;
+  addWorkspace: (workspace: Omit<Workspace, "leads" | "activities" | "campaigns" | "templates" | "proposals" | "invoices" | "contracts" | "webhooks" | "webhookLogs" | "files" | "calendarEvents">) => void;
   switchWorkspace: (id: string) => void;
   inviteMember: (workspaceId: string, member: Workspace["members"][0]) => void;
   connectSMTP: (workspaceId: string, settings: Workspace["smtpSettings"]) => void;
   disconnectSMTP: (workspaceId: string) => void;
+  toggleFeatureFlag: (flag: keyof FeatureFlags) => void;
   
   // Lead Actions
   addLead: (lead: Omit<Lead, "id" | "timeline" | "notes" | "tasks" | "meetings" | "leadScore">) => { success: boolean; isDuplicate: boolean; lead: Lead | null };
@@ -104,6 +180,23 @@ interface ProspectStore {
   toggleTemplateFavorite: (templateId: string) => void;
   duplicateTemplate: (templateId: string) => void;
   deleteTemplate: (templateId: string) => void;
+
+  // Billing Actions
+  addProposal: (proposal: Omit<Proposal, "id" | "status" | "date">) => void;
+  addInvoice: (invoice: Omit<Invoice, "id" | "status">) => void;
+  addContract: (contract: Omit<Contract, "id" | "status" | "date">) => void;
+  
+  // Webhooks Actions
+  addWebhookEndpoint: (webhook: Omit<WebhookEndpoint, "id" | "status">) => void;
+  testWebhookEndpoint: (endpointId: string) => void;
+  deleteWebhookEndpoint: (endpointId: string) => void;
+
+  // File Actions
+  addFile: (file: Omit<DocumentFile, "id" | "date">) => void;
+  deleteFile: (fileId: string) => void;
+
+  // Calendar Actions
+  addCalendarEvent: (event: Omit<CalendarEvent, "id">) => void;
   
   // Notification Actions
   addNotification: (title: string, message: string, type: "success" | "warning" | "info") => void;
@@ -238,6 +331,30 @@ const mockLeads: Lead[] = [
   }
 ];
 
+const initialProposals: Proposal[] = [
+  { id: "prop-1", clientName: "Sarah Jenkins", company: "Figma", services: "Outreach & Pacing integration", pricing: "$4,500/mo", text: "AI generated proposal text for Figma scaling project...", status: "Accepted", date: "2026-06-28" }
+];
+
+const initialInvoices: Invoice[] = [
+  { id: "inv-1", invoiceNumber: "INV-2026-001", clientName: "Amanda Ross (Raycast)", amount: 5000, status: "Paid", dueDate: "2026-07-15" },
+  { id: "inv-2", invoiceNumber: "INV-2026-002", clientName: "David Chen (Linear)", amount: 2000, status: "Pending", dueDate: "2026-07-28" }
+];
+
+const initialContracts: Contract[] = [
+  { id: "con-1", clientName: "Amanda Ross (Raycast)", type: "Retainer", status: "Signed", date: "2026-06-28" }
+];
+
+const initialFiles: DocumentFile[] = [
+  { id: "file-1", name: "Figma_Outreach_Audit.pdf", size: "1.4 MB", type: "pdf", folder: "Audits", date: "2026-06-28" },
+  { id: "file-2", name: "Linear_API_Notes.docx", size: "420 KB", type: "docx", folder: "Client Files", date: "2026-06-28" }
+];
+
+const initialCalendarEvents: CalendarEvent[] = [
+  { id: "cal-1", title: "Figma Follow-up call", date: "2026-07-02", type: "meeting" },
+  { id: "cal-2", title: "Verify dental scraping logs", date: "2026-06-30", type: "task" },
+  { id: "cal-3", title: "Series B Campaign Pacing Outbox", date: "2026-07-04", type: "sequence" }
+];
+
 export const useProspectStore = create<ProspectStore>((set, get) => ({
   session: {
     name: "Alex Rivera",
@@ -249,6 +366,13 @@ export const useProspectStore = create<ProspectStore>((set, get) => ({
       { id: "dev-1", device: "Chrome / Linux (Ubuntu)", ip: "192.168.1.45", location: "Mumbai, India", active: true },
       { id: "dev-2", device: "Safari / Apple iPhone 15", ip: "102.24.12.98", location: "Mumbai, India", active: false }
     ]
+  },
+  featureFlags: {
+    aiAgent: true,
+    proposals: true,
+    contracts: true,
+    invoices: true,
+    webhooks: true
   },
   workspaces: [
     {
@@ -269,6 +393,17 @@ export const useProspectStore = create<ProspectStore>((set, get) => ({
       leads: mockLeads,
       campaigns: initialCampaigns,
       templates: initialTemplates,
+      proposals: initialProposals,
+      invoices: initialInvoices,
+      contracts: initialContracts,
+      webhooks: [
+        { id: "web-1", url: "https://api.velstudio.com/v1/prospect-sync", events: ["lead_created", "email_replied"], status: "Active" }
+      ],
+      webhookLogs: [
+        { id: "log-1", url: "https://api.velstudio.com/v1/prospect-sync", event: "email_replied", timestamp: "2026-06-28 14:02", statusCode: 200 }
+      ],
+      files: initialFiles,
+      calendarEvents: initialCalendarEvents,
       activities: [
         { id: "act-1", type: "lead_won", title: "Amanda Ross (Raycast) contract signed", timestamp: "1 hour ago" },
         { id: "act-2", type: "email_replied", title: "Sarah Jenkins (Figma) replied to sequence", timestamp: "3 hours ago" },
@@ -308,6 +443,13 @@ export const useProspectStore = create<ProspectStore>((set, get) => ({
       ],
       campaigns: [],
       templates: [],
+      proposals: [],
+      invoices: [],
+      contracts: [],
+      webhooks: [],
+      webhookLogs: [],
+      files: [],
+      calendarEvents: [],
       activities: [
         { id: "act-p1", type: "lead_created", title: "Tim Cook added to pipeline", timestamp: "Yesterday" }
       ]
@@ -329,6 +471,13 @@ export const useProspectStore = create<ProspectStore>((set, get) => ({
         leads: [],
         campaigns: [],
         templates: initialTemplates,
+        proposals: [],
+        invoices: [],
+        contracts: [],
+        webhooks: [],
+        webhookLogs: [],
+        files: [],
+        calendarEvents: [],
         activities: [{ id: Math.random().toString(), type: "system", title: `Workspace ${workspace.name} created.`, timestamp: "Just now" }]
       }
     ],
@@ -375,12 +524,15 @@ export const useProspectStore = create<ProspectStore>((set, get) => ({
     )
   })),
 
+  toggleFeatureFlag: (flag) => set((state) => ({
+    featureFlags: { ...state.featureFlags, [flag]: !state.featureFlags[flag] }
+  })),
+
   addLead: (leadData) => {
     const { workspaces, activeWorkspaceId } = get();
     const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
     if (!workspace) return { success: false, isDuplicate: false, lead: null };
 
-    // Duplicate Check logic: Email or Website/Domain matching
     const isDuplicate = workspace.leads.some(
       (l) =>
         (leadData.email && l.email.toLowerCase() === leadData.email.toLowerCase()) ||
@@ -391,7 +543,6 @@ export const useProspectStore = create<ProspectStore>((set, get) => ({
       return { success: false, isDuplicate: true, lead: null };
     }
 
-    // Dynamic AI lead score calculator: based on company size, location, and role match
     let score = 50 + Math.floor(Math.random() * 25);
     if (leadData.role.toLowerCase().includes("founder") || leadData.role.toLowerCase().includes("cto") || leadData.role.toLowerCase().includes("vp")) {
       score += 15;
@@ -576,7 +727,6 @@ export const useProspectStore = create<ProspectStore>((set, get) => ({
     )
   })),
 
-  // Campaigns Dispatch
   addCampaign: (campData) => set((state) => ({
     workspaces: state.workspaces.map((w) =>
       w.id === state.activeWorkspaceId
@@ -628,7 +778,6 @@ export const useProspectStore = create<ProspectStore>((set, get) => ({
     )
   })),
 
-  // Templates Dispatch
   addTemplate: (tempData) => set((state) => ({
     workspaces: state.workspaces.map((w) =>
       w.id === state.activeWorkspaceId
@@ -687,6 +836,162 @@ export const useProspectStore = create<ProspectStore>((set, get) => ({
         ? {
             ...w,
             templates: w.templates.filter((t) => t.id !== templateId)
+          }
+        : w
+    )
+  })),
+
+  // Billing Actions
+  addProposal: (propData) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === state.activeWorkspaceId
+        ? {
+            ...w,
+            proposals: [
+              ...w.proposals,
+              {
+                ...propData,
+                id: `prop-${Math.random().toString(36).substring(2, 9)}`,
+                status: "Draft",
+                date: new Date().toISOString().slice(0, 10)
+              }
+            ]
+          }
+        : w
+    )
+  })),
+
+  addInvoice: (invData) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === state.activeWorkspaceId
+        ? {
+            ...w,
+            invoices: [
+              ...w.invoices,
+              {
+                ...invData,
+                id: `inv-${Math.random().toString(36).substring(2, 9)}`,
+                status: "Pending"
+              }
+            ]
+          }
+        : w
+    )
+  })),
+
+  addContract: (conData) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === state.activeWorkspaceId
+        ? {
+            ...w,
+            contracts: [
+              ...w.contracts,
+              {
+                ...conData,
+                id: `con-${Math.random().toString(36).substring(2, 9)}`,
+                status: "Draft",
+                date: new Date().toISOString().slice(0, 10)
+              }
+            ]
+          }
+        : w
+    )
+  })),
+
+  // Webhooks
+  addWebhookEndpoint: (webData) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === state.activeWorkspaceId
+        ? {
+            ...w,
+            webhooks: [
+              ...w.webhooks,
+              {
+                ...webData,
+                id: `web-${Math.random().toString(36).substring(2, 9)}`,
+                status: "Active"
+              }
+            ]
+          }
+        : w
+    )
+  })),
+
+  testWebhookEndpoint: (id) => set((state) => ({
+    workspaces: state.workspaces.map((w) => {
+      if (w.id !== state.activeWorkspaceId) return w;
+      const target = w.webhooks.find(web => web.id === id);
+      if (!target) return w;
+      return {
+        ...w,
+        webhookLogs: [
+          {
+            id: `wlog-${Math.random().toString(36).substring(2, 9)}`,
+            url: target.url,
+            event: target.events[0] || "test_event",
+            timestamp: new Date().toISOString().slice(0, 19).replace("T", " "),
+            statusCode: 200
+          },
+          ...w.webhookLogs
+        ]
+      };
+    })
+  })),
+
+  deleteWebhookEndpoint: (id) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === state.activeWorkspaceId
+        ? {
+            ...w,
+            webhooks: w.webhooks.filter((web) => web.id !== id)
+          }
+        : w
+    )
+  })),
+
+  // Document Files
+  addFile: (fileData) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === state.activeWorkspaceId
+        ? {
+            ...w,
+            files: [
+              ...w.files,
+              {
+                ...fileData,
+                id: `file-${Math.random().toString(36).substring(2, 9)}`,
+                date: new Date().toISOString().slice(0, 10)
+              }
+            ]
+          }
+        : w
+    )
+  })),
+
+  deleteFile: (id) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === state.activeWorkspaceId
+        ? {
+            ...w,
+            files: w.files.filter((f) => f.id !== id)
+          }
+        : w
+    )
+  })),
+
+  // Calendar
+  addCalendarEvent: (eventData) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === state.activeWorkspaceId
+        ? {
+            ...w,
+            calendarEvents: [
+              ...w.calendarEvents,
+              {
+                ...eventData,
+                id: `cal-${Math.random().toString(36).substring(2, 9)}`
+              }
+            ]
           }
         : w
     )

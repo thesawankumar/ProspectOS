@@ -23,7 +23,13 @@ import {
   Send,
   Layers,
   Sparkles,
-  Zap
+  Zap,
+  BarChart3,
+  FileText,
+  FolderOpen,
+  Calendar,
+  Link2,
+  Terminal
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
@@ -70,6 +76,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { label: "Template Library", href: "/dashboard/templates", icon: <Layers className="h-4.5 w-4.5" /> },
     { label: "AI Copywriter", href: "/dashboard/ai", icon: <Sparkles className="h-4.5 w-4.5" /> },
     { label: "AI Outreach Agent", href: "/dashboard/agent", icon: <Zap className="h-4.5 w-4.5" /> },
+    { label: "Analytics Reports", href: "/dashboard/analytics", icon: <BarChart3 className="h-4.5 w-4.5" /> },
+    { label: "Invoices & Proposals", href: "/dashboard/billing", icon: <FileText className="h-4.5 w-4.5" /> },
+    { label: "File Manager", href: "/dashboard/documents", icon: <FolderOpen className="h-4.5 w-4.5" /> },
+    { label: "Calendar Scheduler", href: "/dashboard/calendar", icon: <Calendar className="h-4.5 w-4.5" /> },
+    { label: "Integrations & API", href: "/dashboard/integrations", icon: <Link2 className="h-4.5 w-4.5" /> },
+    { label: "Developer Admin", href: "/dashboard/admin", icon: <Terminal className="h-4.5 w-4.5" /> },
     { label: "Workspace Settings", href: "/dashboard/settings", icon: <Settings className="h-4.5 w-4.5" /> }
   ];
 
